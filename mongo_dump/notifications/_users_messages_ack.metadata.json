@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"unique":true,"key":{"id":{"$numberInt":"1"}},"name":"id_1","background":true},{"v":{"$numberInt":"2"},"key":{"channel":{"$numberInt":"1"}},"name":"channel_1","background":true}],"uuid":"b93cd198491e4f5ab400935a8e005d58","collectionName":"_users_messages_ack"}
