@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { timer } from 'rxjs';
 import { useEffect, useState } from 'react';
-import { Dictionary } from 'lodash';
+import { Dictionary, last } from 'lodash';
 import { observer } from 'mobx-react-lite';
 import groupBy from 'lodash/groupBy';
 import { Socket } from 'primus';
@@ -15,82 +15,25 @@ import api from '../api';
 import Chat from '../Chat';
 import ChannelsNavbar from '../ChannelsNavbar';
 import TopNavbar from '../TopNavbar';
+var ls = require('local-storage');
+
 import './index.sass';
+import { combineState, dedupMsgs, reduceState } from './logic';
+
+export type Ackable<T> = T & {
+  acked: boolean;
+};
 
 export interface ChannelProps {
   store: Store;
 }
 
-type ChannelState = Channel & {
-  msgs: Dictionary<Message>;
+export type ChannelState = Channel & {
+  msgs: Dictionary<Ackable<Message>>;
   length: number;
 };
 
-type ChannelIdToState = Dictionary<ChannelState>;
-
-const normalizeToObject = (
-  arr: any[],
-  extract: (a: any) => any
-): Dictionary<any> =>
-  arr.reduce((acc, item) => ({ ...acc, [extract(item)]: item }), {});
-
-export const dedupMsgs = (
-  msgs: Message[],
-  state: ChannelIdToState
-): Message[] => msgs.filter((msg) => !state[msg.channel]?.msgs[msg.id]);
-
-const combineState = (
-  msgs: Message[],
-  state: ChannelIdToState,
-  options?: { first?: boolean }
-): ChannelIdToState =>
-  Object.entries(groupBy(msgs, (msg) => msg.channel))
-    .map(([channelId, msgs]) => {
-      const { msgs: channelMsgs, length, ...channel } = state[channelId];
-      const combineMsgs = options?.first
-        ? {
-            ...normalizeToObject(msgs, (msg) => msg.id),
-            ...channelMsgs,
-          }
-        : {
-            ...channelMsgs,
-            ...normalizeToObject(msgs, (msg) => msg.id),
-          };
-      const channelState: ChannelState = {
-        ...channel,
-        msgs: combineMsgs,
-        length: length + msgs.length,
-      };
-      return [channelId, channelState] as [string, ChannelState];
-    })
-    .reduce(
-      (acc, [channelId, channel]) => ({ ...acc, [channelId]: channel }),
-      state
-    );
-
-const reduceState = (
-  update: ChannelIdToState,
-  state: ChannelIdToState
-): ChannelIdToState => {
-  const nextState: ChannelIdToState = Object.entries(update).reduce(
-    (acc, [channelId, channelState]) => {
-      const msgs = {
-        ...(state[channelId]?.msgs || {}),
-        ...channelState.msgs,
-      };
-      return {
-        ...acc,
-        [channelId]: {
-          ...channelState,
-          msgs,
-          length: Object.keys(msgs).length,
-        },
-      };
-    },
-    state
-  );
-  return nextState;
-};
+export type ChannelIdToState = Dictionary<ChannelState>;
 
 function usePrevious<T>(value: T) {
   const ref = React.useRef<T>();
@@ -99,12 +42,13 @@ function usePrevious<T>(value: T) {
   });
   return ref.current;
 }
-
 const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
-  const [wsClient, setWSClient] = useState<Socket>(null);
+  const [wsClient, setWSClient] = useState<Socket | undefined>();
   const [channelsState, setChannelsState] = useState<ChannelIdToState>({});
-  const [lastUpdate, setLastUpdate] = useState<Date>(undefined);
-  const [currentChannel, setCurrentChannel] = useState<Channel>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | undefined>();
+  const [currentChannel, setCurrentChannel] = useState<
+    ChannelState | undefined
+  >();
   const [message, setMessage] = useState<string>('');
   const [visible, setVisible] = useState<boolean>(false);
   const scrollableRef = React.useRef<any>();
@@ -121,7 +65,10 @@ const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
     );
     if (diff.length === 0) return {};
     const stateUpdate = diff.reduce<ChannelIdToState>(
-      (acc, c) => ({ ...acc, [c.id]: { ...c, msgs: {}, length: 0 } }),
+      (acc, c) => ({
+        ...acc,
+        [c.id]: { ...c, msgs: {}, length: 0, lastMsg: null },
+      }),
       {}
     );
     wsClient &&
@@ -135,7 +82,10 @@ const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
 
   useEffect(() => {
     const scrollable = scrollableRef.current;
-    if (prevCount !== channelsState[currentChannel?.id]?.length)
+    if (
+      currentChannel?.id &&
+      prevCount !== channelsState[currentChannel?.id as string]?.length
+    )
       scrollable.scrollTop = scrollable.scrollHeight - scrollable.clientHeight;
     setVisible(true);
     const allChannelsPollSubscription = timer(100, 5000).subscribe(() =>
@@ -182,35 +132,48 @@ const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
           setLastUpdate(() => new Date());
         }
       });
-    return () => wsClient && wsClient.removeAllListeners('data');
+    return () => {
+      wsClient && wsClient.removeAllListeners('data');
+    }
   }, [channelsState, wsClient]);
 
   useEffect(() => {
     currentChannel &&
       api.getChannelMsgs(currentChannel.id).then((msgs) => {
         const nextState = combineState(msgs, channelsState, { first: true });
-        setChannelsState(nextState);
-        const counter = store.channelCounters[currentChannel?.id];
-        ackMessage(currentChannel?.id, msgs[msgs.length - 1].id);
         currentChannel?.id && store.resetChannelCounter(currentChannel?.id);
+        setChannelsState(nextState);
+        const lastMsg = last(Object.values(nextState[currentChannel.id].msgs));
+        if (lastMsg && !lastMsg?.acked)
+          ackMessage(currentChannel?.id, lastMsg.id);
       });
-
-    return () =>
-      currentChannel?.id && store.resetChannelCounter(currentChannel?.id);
   }, [currentChannel]);
+
+  useEffect(() => {
+    if (currentChannel) {
+      const channelFromState = channelsState[currentChannel.id];
+      store.resetChannelCounter(channelFromState?.id);
+      const lastMsg =
+        channelFromState.length &&
+        Object.values(channelFromState.msgs)[channelFromState.length - 1];
+      if (lastMsg) {
+        !lastMsg.acked && ackMessage(channelFromState?.id, lastMsg.id);
+      }
+    }
+  }, [currentChannel, channelsState]);
 
   const sendMessage = (data: Message) => {
     const next = combineState([data], channelsState);
     setChannelsState(next);
     setMessage('');
-    wsClient.write({
+    wsClient && wsClient.write({
       data,
       type: ActionType.SendMessage,
     });
   };
 
   const ackMessage = (channelId: string, messageId: string) => {
-    wsClient.write({
+    wsClient && wsClient.write({
       data: { channelId, messageId },
       type: ActionType.AckMessage,
     });
@@ -219,17 +182,17 @@ const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
   return (
     <>
       <TopNavbar
-        currentChannel={currentChannel}
+        currentChannel={currentChannel as ChannelState}
         lastUpdate={lastUpdate}
         store={store}
       />
-      <Flex className='chat-app__chat-wrapper'>
+      <Flex className="chat-app__chat-wrapper">
         <ChannelsNavbar
           store={store}
           currentChannel={currentChannel}
           onClick={(channel) => {
             setVisible(false);
-            setCurrentChannel(channel);
+            setCurrentChannel(channelsState[channel.id]);
           }}
           channels={Object.values(channelsState)}
           lastUpdate={lastUpdate}
@@ -237,11 +200,15 @@ const Channels: React.FC<ChannelProps> = observer(({ store }: ChannelProps) => {
         <Chat
           key={currentChannel?.name}
           onClick={() =>
-            sendMessage(new Message(user, currentChannel.id, message))
+            sendMessage(
+              new Message(user, currentChannel?.id as string, message)
+            )
           }
           msgs={
             (currentChannel &&
-              Object.values(channelsState[currentChannel.id]?.msgs || {})) ||
+              Object.values(
+                channelsState[currentChannel?.id as string]?.msgs || {}
+              )) ||
             []
           }
           onInputChange={setMessage}

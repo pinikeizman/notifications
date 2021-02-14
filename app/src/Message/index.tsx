@@ -1,13 +1,15 @@
 import * as React from 'react';
 import moment from 'moment';
 import cn from 'classnames';
+
 import { Message } from '../../../src/types/Message';
 import Flex from '../Flex';
-import './index.sass';
 import { isRTL } from '../Input';
+import { Ackable } from '../Channels';
+import './index.sass';
 
 export interface MsgProps {
-  msg: Message;
+  msg: Ackable<Message>;
   mine: boolean;
 }
 

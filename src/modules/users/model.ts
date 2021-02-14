@@ -10,7 +10,7 @@ export const UserSchema: Schema<UserDoc> = new Schema({
   username: { type: String, required: true, unique: true},
   organization: { type: String, required: true },
   password: { type: String, required: true},
-  channels: [String]
+  photo: { type: String}
 });
 
 UserSchema.index({ organization: 1, username: 1}, { unique: true })

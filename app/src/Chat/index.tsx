@@ -10,12 +10,13 @@ import Input from '../Input';
 import Button from '../Button';
 import '../../static/chat.jpg';
 import './index.sass';
+import { Ackable } from '../Channels';
 
 interface ChatProps {
   visible: boolean;
   scrollableRef: React.LegacyRef<HTMLDivElement>;
-  msgs: Message[];
-  currentChannel: Channel;
+  msgs: Ackable<Message>[];
+  currentChannel?: Channel;
   cueentText: string;
   user: User;
   onInputChange?: (value: string) => void;
@@ -49,7 +50,7 @@ const Chat = (props: ChatProps) => (
           stretch
           placeholder="Type some msg.."
           value={props.cueentText}
-          onChange={(e) => props.onInputChange(e.target.value)}
+          onChange={(e) => props.onInputChange && props.onInputChange(e.target.value)}
           onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter' && !!props.cueentText)
               props.onClick(props.cueentText);

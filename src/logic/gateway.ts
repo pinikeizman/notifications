@@ -3,8 +3,11 @@ import { fromEvent, Subscription } from 'rxjs';
 import { filter, map, tap, bufferTime, groupBy } from 'rxjs/operators';
 import { Message } from '../types/Message';
 import logger from '../libs/logging';
-import msgsStore, { publishToExchange } from '../modules/messages/store';
-import channelStore from '../modules/channels/store';
+import msgsStore, {
+  getMsgById,
+  publishToExchange,
+} from '../modules/messages/store';
+import channelStore, { updateChannelLastMsg } from '../modules/channels/store';
 import model from '../modules/messages/model';
 import {
   Action,
@@ -27,9 +30,12 @@ export const handleAction = (
   switch (type) {
     case ActionType.SendMessage:
       const msg = action.data as Message;
-      await msgsStore
-        .upsertMsgs([msg], user.organization)
-        .then((a) => logger.getLogger().info('bulk update', a));
+      await Promise.all([
+        msgsStore
+          .upsertMsgs([msg], user.organization)
+          .then((a) => logger.getLogger().info('bulk update', a)),
+        updateChannelLastMsg(msg, user.organization),
+      ]);
       publishToExchange({
         ...new Response<Message>(ResponseTypes.MessagesUpdate, msg),
         organization: user.organization,
@@ -43,14 +49,11 @@ export const handleAction = (
       });
     case ActionType.AckMessage:
       const ackAction = action.data as MessageAck;
+      const msgFromDb = await getMsgById(ackAction.messageId, user.organization)
       await msgsStore
-        .ackMessage(
-          ackAction.messageId,
-          ackAction.channelId,
-          user
-        )
+        .ackMessage(msgFromDb?._id as string, ackAction.channelId, user)
         .then((res) =>
-          logger.getLogger().info('message acked', ackAction, res)
+          logger.getLogger().info('message acked', ackAction, res, user)
         );
       publishToExchange({
         ...new Response<boolean>(ResponseTypes.SubscriptionRefresed, true),

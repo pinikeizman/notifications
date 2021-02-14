@@ -17,11 +17,12 @@ import Fade from '@material-ui/core/Fade';
 import Popper from '@material-ui/core/Popper';
 import Box from '@material-ui/core/Box';
 import ClickAwayListener from '@material-ui/core/ClickAwayListener';
+import { ChannelState } from '../Channels';
 
 type TopNavbarProps = {
   store: Store;
-  currentChannel: Channel;
-  lastUpdate: Date;
+  currentChannel: ChannelState;
+  lastUpdate?: Date;
 };
 
 const TopNavbar = ({
@@ -33,9 +34,6 @@ const TopNavbar = ({
   const [anchorEl, setAnchorEl] = React.useState(null);
   const avatarRef = React.useRef<any>();
   const user = store.user;
-  useEffect(() => {
-    setAnchorEl(avatarRef.current);
-  }, [open]);
   return (
     <Flex className="chat-app__top-navbar" {...props}>
       <Box display='flex' flexDirection='row' alignItems='center'>
@@ -44,7 +42,7 @@ const TopNavbar = ({
       </Box>
       <Avatar
         size="m"
-        onClick={(e) => setAnchorEl(e.target)}
+        onClick={(e) => anchorEl ? setAnchorEl(null) : setAnchorEl(e.target as any)}
         alt={user.name}
         src={user.photo}
         ref={avatarRef}

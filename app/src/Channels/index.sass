@@ -17,9 +17,17 @@
   &__channels
     border-right: #ddd 1px solid
     flex: 20%
+    @media (max-width: 1301px)
+      flex: 30%
+    @media (max-width: 900px)
+      flex: 40%
   &__channel_chat
     display: flex
     flex: 80%
+    @media (max-width: 1301px)
+      flex: 70%
+    @media (max-width: 900px)
+      flex: 60%
   &__header
     padding: 5px
     background: #eeeeee

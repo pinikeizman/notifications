@@ -13,6 +13,7 @@ export const ChannelSchema: Schema = new Schema(
   {
     id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
+    last_msg: { type: Object },
     picture: { type: String },
   },
   { timestamps: true }

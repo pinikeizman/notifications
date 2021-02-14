@@ -21,7 +21,7 @@ const CreateChannelForm = ({
   onClose,
   user,
   users,
-  open,
+  open = false,
   ...props
 }: {
   user: User;
@@ -30,7 +30,7 @@ const CreateChannelForm = ({
   onSubmit: (c: Channel, users: string[]) => Promise<any>;
   onClose: () => void;
 }) => {
-  const [selectedUsers, setSelectedUsers] = React.useState([]);
+  const [selectedUsers, setSelectedUsers] = React.useState<User[]>([]);
   const [channelName, setChannelName] = React.useState('');
 
   const handleChangeMultiple = (
@@ -69,7 +69,7 @@ const CreateChannelForm = ({
             onChange={handleChangeMultiple}
             input={<Input />}
             renderValue={(selected: User[]) =>
-              selected.map((user) => <span title={user.username}>{ user.name }</span>)
+              selected.map((user) => <span title={user.username} key={user.id}>{ user.name }</span>)
             }
             inputProps={{ 'aria-label': 'Without label' }}
           >

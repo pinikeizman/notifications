@@ -72,6 +72,7 @@ export const getMsgsObserver = (channels: Set<string>, org: string) => {
     subscription,
   };
 };
+
 export const upsertMsgs = (msgs: Message[], organization: string) => {
   const ops = msgs.map((msg) => ({
     updateOne: {
@@ -95,9 +96,10 @@ export const getChannelsMsgs = (channel: string, org: string) =>
   model
     .getMessagesModel(org)
     .find({ channel })
-    .sort({ _id: 1 })
+    .sort({ _id: -1 })
     .limit(100)
-    .exec();
+    .exec()
+    .then((res) => (res && res.length > 0 ? res.reverse() : res));
 
 export const ackMessage = (messageId: string, channelId: string, user: User) =>
   model
@@ -110,11 +112,7 @@ export const ackMessage = (messageId: string, channelId: string, user: User) =>
     .lean()
     .exec();
 export const getMsgById = (id: string, org: string) =>
-  model
-    .getMessagesModel(org)
-    .findOne({ id })
-    .lean()
-    .exec();
+  model.getMessagesModel(org).findOne({ id }).lean().exec();
 
 export default {
   getChannelsMsgs,
@@ -122,5 +120,5 @@ export default {
   getMsgsObserver,
   subject,
   ackMessage,
-  getMsgById
+  getMsgById,
 };
