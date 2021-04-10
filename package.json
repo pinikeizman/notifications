@@ -1,7 +1,7 @@
 {
-  "name": "@pinhask/strigo",
+  "name": "@pinhask/notification",
   "version": "1.0.0",
-  "description": "Strigo home assignment",
+  "description": "Reactive React Chat App",
   "main": "index.js",
   "scripts": {
     "lint": "tslint -c tslint.json -p tsconfig.json --fix",
